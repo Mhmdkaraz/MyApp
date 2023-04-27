@@ -46,7 +46,7 @@ Ext.onReady(function () {
             var values = form.getValues();
             values.id = Ext.id();
             var callback = () => {
-              gridPanel.getStore().loadData(getTodoItems())
+              gridPanel.getStore().loadData(getTodoItems());
             };
             addTodoItem(values, callback);
             form.reset();
@@ -79,10 +79,36 @@ Ext.onReady(function () {
     closable: true,
     closeAction: 'hide',
     width: 420,
+    height: 250,
     layout: 'fit',
     items: [formPanel],
   });
 
+  var mod = Ext.create('Ext.window.Window', {
+    modal: true,
+    closable: true,
+    closeAction: 'hide',
+    width: 420,
+    height: 200,
+    layout: 'fit',
+    items: [
+      {
+        xtype: 'panel',
+        items: [
+          {
+            xtype: 'displayfield',
+            fieldLabel: 'Title',
+            name: 'title',
+          },
+          {
+            xtype: 'displayfield',
+            fieldLabel: 'Description',
+            name: 'description',
+          },
+        ],
+      },
+    ],
+  });
   var gridPanel = Ext.create('Ext.grid.Panel', {
     title: 'Todo List',
     width: 600,
@@ -109,12 +135,12 @@ Ext.onReady(function () {
         listeners: {
           click: function (grid, item, index, e) {
             // show the record data in a modal
-            todoModal.setTitle('Todo Details');
-            todoModal.show();
+            mod.setTitle('Todo Details');
+            mod.show();
             var record = todoStore.getAt(index);
-            formPanel.getForm().loadRecord(record);
-            formPanel.down('#addBtn').hide();
-            formPanel.down('#updateBtn').hide();
+            // Set the title and description values in the display fields
+            mod.down('[name=title]').setValue(record.get('title'));
+            mod.down('[name=description]').setValue(record.get('description'));
           },
         },
       },
@@ -136,12 +162,12 @@ Ext.onReady(function () {
         listeners: {
           click: function (grid, item, index, e) {
             // show the record data in a modal
-            todoModal.setTitle('Todo Details');
-            todoModal.show();
+            mod.setTitle('Todo Details');
+            mod.show();
             var record = todoStore.getAt(index);
-            formPanel.getForm().loadRecord(record);
-            formPanel.down('#addBtn').hide();
-            formPanel.down('#updateBtn').hide();
+            // Set the title and description values in the display fields
+            mod.down('[name=title]').setValue(record.get('title'));
+            mod.down('[name=description]').setValue(record.get('description'));
           },
         },
       },
@@ -156,7 +182,7 @@ Ext.onReady(function () {
             console.log(todoId);
             var todo = record.data;
             var callback = () => {
-              gridPanel.getStore().loadData(getTodoItems())
+              gridPanel.getStore().loadData(getTodoItems());
             };
             handleCompleteChange(todoId, callback);
           },
