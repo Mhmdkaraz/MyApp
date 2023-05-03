@@ -1,12 +1,15 @@
 Ext.onReady(function () {
-  var todos = getTodoItems();
   var todoStore = Ext.create('Ext.data.Store', {
-    fields: ['id', 'title', 'description', 'completed'],
+    fields: ['TODOID', 'TITLE', 'DESCRIPTION', 'COMPLETED'],
     proxy: {
-      type: 'localstorage',
-      id: 'todos',
+      type: 'ajax',
+      url: '/MyApp/api/get_todo.php',
+      reader: {
+        type: 'json',
+        rootProperty: 'results',
+      },
     },
-    data: todos,
+    autoLoad: true,
   });
 
   var formPanel = Ext.create('Ext.form.Panel', {
@@ -41,17 +44,8 @@ Ext.onReady(function () {
         text: 'Save',
         itemId: 'addBtn',
         handler: function () {
-          var form = this.up('form').getForm();
-          if (form.isValid()) {
-            var values = form.getValues();
-            values.id = Ext.id();
-            var callback = () => {
-              gridPanel.getStore().loadData(getTodoItems());
-            };
-            addTodoItem(values, callback);
-            form.reset();
-            todoModal.hide();
-          }
+          const form = this.up('form').getForm();
+          saveTodoForm(form, todoStore, todoModal);
         },
       },
       {
@@ -59,19 +53,22 @@ Ext.onReady(function () {
         itemId: 'updateBtn',
         disabled: true,
         handler: function () {
-          var form = this.up('form').getForm();
-          if (form.isValid()) {
-            var values = form.getValues();
-            updateTodoItem(values.id, values);
-            todoStore.loadRawData(getTodoItems(), false);
-            form.reset();
-            this.disable();
-            formPanel.down('#addBtn').enable();
-            todoModal.hide();
-          }
+          const form = this.up('form').getForm();
+          updateTodoForm(form, todoStore, formPanel, todoModal);
         },
       },
     ],
+    listeners: {
+      render: function (formPanel) {
+        var updateBtn = formPanel.down('#updateBtn');
+        formPanel.getForm().on('load', function (form, record) {
+          if (record && record.data.id) {
+            updateBtn.enable();
+            formPanel.down('#addBtn').disable();
+          }
+        });
+      },
+    },
   });
 
   var todoModal = Ext.create('Ext.window.Window', {
@@ -93,7 +90,7 @@ Ext.onReady(function () {
     layout: 'fit',
     items: [
       {
-        xtype: 'panel',
+        xtype: 'form',
         items: [
           {
             xtype: 'displayfield',
@@ -119,10 +116,10 @@ Ext.onReady(function () {
     columns: [
       {
         header: 'Title',
-        dataIndex: 'title',
+        dataIndex: 'TITLE',
         flex: 1,
         renderer: function (value, metaData, record) {
-          if (record.get('completed')) {
+          if (record.get('COMPLETED') == true) {
             return (
               '<span style="text-decoration: line-through; -webkit-text-stroke-color: black;">' +
               value +
@@ -134,22 +131,48 @@ Ext.onReady(function () {
         },
         listeners: {
           click: function (grid, item, index, e) {
-            // show the record data in a modal
-            mod.setTitle('Todo Details');
+            //get the form from the modal window
+            var form = mod.down('form');
+
+            //get the clicked record
+            var record = grid.getStore().getAt(index);
+            mod.setTitle('Todo ' + record.get('TODOID') + ' Details');
+            //populate the form fields with the record data
+            form.getForm().setValues({
+              title: record.get('TITLE'),
+              description: record.get('DESCRIPTION'),
+            });
+
+            //show the modal window
             mod.show();
-            var record = todoStore.getAt(index);
-            // Set the title and description values in the display fields
-            mod.down('[name=title]').setValue(record.get('title'));
-            mod.down('[name=description]').setValue(record.get('description'));
           },
         },
       },
       {
         header: 'Description',
-        dataIndex: 'description',
+        dataIndex: 'DESCRIPTION',
         flex: 2,
+        listeners: {
+          click: function (grid, item, index, e) {
+            mod.setTitle('Todo Details');
+            //get the form from the modal window
+            var form = mod.down('form');
+
+            //get the clicked record
+            var record = grid.getStore().getAt(index);
+            mod.setTitle('Todo ' + record.get('TODOID') + ' Details');
+            //populate the form fields with the record data
+            form.getForm().setValues({
+              title: record.get('TITLE'),
+              description: record.get('DESCRIPTION'),
+            });
+
+            //show the modal window
+            mod.show();
+          },
+        },
         renderer: function (value, metaData, record) {
-          if (record.get('completed')) {
+          if (record.get('COMPLETED') == true) {
             return (
               '<span style="text-decoration: line-through; -webkit-text-stroke-color: black;">' +
               value +
@@ -159,33 +182,25 @@ Ext.onReady(function () {
             return value;
           }
         },
-        listeners: {
-          click: function (grid, item, index, e) {
-            // show the record data in a modal
-            mod.setTitle('Todo Details');
-            mod.show();
-            var record = todoStore.getAt(index);
-            // Set the title and description values in the display fields
-            mod.down('[name=title]').setValue(record.get('title'));
-            mod.down('[name=description]').setValue(record.get('description'));
-          },
-        },
       },
       {
         xtype: 'checkcolumn',
         header: 'Completed',
-        dataIndex: 'completed',
+        dataIndex: 'COMPLETED',
         listeners: {
-          checkchange: function (grid, rowIndex, colIndex) {
-            var record = todoStore.getAt(rowIndex);
-            var todoId = record.get('id');
-            console.log(todoId);
-            var todo = record.data;
-            var callback = () => {
-              gridPanel.getStore().loadData(getTodoItems());
-            };
-            handleCompleteChange(todoId, callback);
+          checkchange: function (checkColumn, rowIndex, checked, record, e) {
+            var record = gridPanel.getStore().getAt(rowIndex);
+            var todoid = record.get('TODOID');
+            var completed = checked ? 1 : 0;
+            onCheckChange(todoid, completed, record);
           },
+        },
+        renderer: function (value, metaData, record) {
+          if (record.get('COMPLETED') == true) {
+            return '<div class="x-grid-checkcolumn x-grid-checkcolumn-checked"></div>';
+          } else {
+            return '<div class="x-grid-checkcolumn"></div>';
+          }
         },
       },
       {
@@ -199,12 +214,17 @@ Ext.onReady(function () {
             handler: function (grid, rowIndex, colIndex) {
               formPanel.down('#updateBtn').show();
               formPanel.down('#addBtn').hide();
-              var rec = grid.getStore().getAt(rowIndex);
-              formPanel.getForm().loadRecord(rec);
-              todoModal.setTitle('Edit Todo');
-              todoModal.show();
+              var form = todoModal.down('form');
+              var record = grid.getStore().getAt(rowIndex);
+              todoModal.setTitle('Add Todo');
+              form.getForm().setValues({
+                id: record.get('TODOID'),
+                title: record.get('TITLE'),
+                description: record.get('DESCRIPTION'),
+              });
               formPanel.down('#updateBtn').enable();
               formPanel.down('#addBtn').disable();
+              todoModal.show();
             },
           },
           {
@@ -216,9 +236,10 @@ Ext.onReady(function () {
                 'Are you sure you want to delete this todo?',
                 function (btn) {
                   if (btn == 'yes') {
-                    var rec = grid.getStore().getAt(rowIndex);
-                    deleteTodoItem(rec.get('id'));
-                    grid.getStore().remove(rec);
+                    //delete item
+                    var record = grid.getStore().getAt(rowIndex);
+                    var todoid = record.get('TODOID');
+                    deleteTodo(todoid, grid);
                   }
                 }
               );
